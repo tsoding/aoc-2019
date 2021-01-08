@@ -30,5 +30,5 @@ The Glorious Glasgow Haskell Compilation System, version 8.6.5
 
 ```console
 $ cd <day-folder>
-$ runghc Main.hs
+$ runghc -i.. Main.hs
 ```
