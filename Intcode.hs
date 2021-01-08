@@ -15,37 +15,73 @@ data Machine = Machine
   { getMemory :: !Memory
   , getIp :: !Int
   , isHalt :: !Bool
+  , getInput :: [Int]
+  , getOutput :: [Int]
   } deriving (Show)
+
+emptyMachine :: Machine
+emptyMachine = Machine (array (0, 0) [(0, 0)]) 0 False [] []
+
+setInput :: [Int] -> Machine -> Machine
+setInput input machine = machine { getInput = input }
+
+setOutput :: [Int] -> Machine -> Machine
+setOutput output machine = machine { getOutput = output }
+
+setMemory :: Memory -> Machine -> Machine
+setMemory memory machine = machine { getMemory = memory }
 
 memoryFromFile :: FilePath -> IO Memory
 memoryFromFile filePath = do
   xs <-
     map (read . T.unpack . T.strip) . T.splitOn "," <$> T.readFile filePath
-  let n = length xs
-  return $ array (0, n - 1) (zip [0 ..] xs)
+  return $ memoryFromImage xs
 
 machineFromFile :: FilePath -> IO Machine
-machineFromFile filePath = do
-  memory <- memoryFromFile filePath
-  return $ Machine memory 0 False
+machineFromFile filePath = machineFromMemory <$> memoryFromFile filePath
 
+machineFromMemory :: Memory -> Machine
+machineFromMemory memory = Machine memory 0 False [] []
+
+memoryFromImage :: [Int] -> Memory
+memoryFromImage xs = array (0, n - 1) (zip [0 ..] xs)
+  where n = length xs
+
+-- TODO: opcode 4
+-- TODO: parameter modes
 step :: Machine -> Machine
-step machine@(Machine _ _ True) = machine
-step machine@(Machine memory ip _) =
-  let opcode = memory ! getIp machine
-   in case opcode of
-        1 ->
-          let a1 = memory ! (memory ! (ip + 1))
-              a2 = memory ! (memory ! (ip + 2))
-              dst = memory ! (ip + 3)
-           in machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
-        2 ->
-          let a1 = memory ! (memory ! (ip + 1))
-              a2 = memory ! (memory ! (ip + 2))
-              dst = memory ! (ip + 3)
-           in machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
-        99 -> machine {isHalt = True}
-        _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
+step machine
+  | isHalt machine = machine
+  | otherwise =
+    let ip = getIp machine
+        memory = getMemory machine
+        input = getInput machine
+        opcode = memory ! ip
+     in case opcode of
+          1 ->
+            let a1 = memory ! (memory ! (ip + 1))
+                a2 = memory ! (memory ! (ip + 2))
+                dst = memory ! (ip + 3)
+             in machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
+          2 ->
+            let a1 = memory ! (memory ! (ip + 1))
+                a2 = memory ! (memory ! (ip + 2))
+                dst = memory ! (ip + 3)
+             in machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
+          3 ->
+            case input of
+              (x:input') ->
+                let p = memory ! (ip + 1)
+                 in machine
+                      { getMemory = memory // [(p, x)]
+                      , getIp = ip + 2
+                      , getInput = input'
+                      }
+              _ ->
+                error $ printf "Empty input for read opcode at position %d" ip
+          4 -> undefined
+          99 -> machine {isHalt = True}
+          _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
 execute :: Machine -> Machine
 execute = head . dropWhile (not . isHalt) . iterate' step
