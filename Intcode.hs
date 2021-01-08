@@ -106,6 +106,46 @@ step machine
           4 ->
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
              in machine {getOutput = a1 : output, getIp = ip + 2}
+          5 ->
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+                a2 = obtainParam memory (memory ! (ip + 2)) m2
+             in if a1 /= 0
+                  then machine {getIp = a2}
+                  else machine {getIp = ip + 3}
+          6 ->
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+                a2 = obtainParam memory (memory ! (ip + 2)) m2
+             in if a1 == 0
+                  then machine {getIp = a2}
+                  else machine {getIp = ip + 3}
+          7 ->
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+                a2 = obtainParam memory (memory ! (ip + 2)) m2
+                dst = memory ! (ip + 3)
+             in machine
+                  { getMemory =
+                      memory //
+                      [ ( dst
+                        , if a1 < a2
+                            then 1
+                            else 0)
+                      ]
+                  , getIp = ip + 4
+                  }
+          8 ->
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+                a2 = obtainParam memory (memory ! (ip + 2)) m2
+                dst = memory ! (ip + 3)
+             in machine
+                  { getMemory =
+                      memory //
+                      [ ( dst
+                        , if a1 == a2
+                            then 1
+                            else 0)
+                      ]
+                  , getIp = ip + 4
+                  }
           99 -> machine {isHalt = True}
           _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
