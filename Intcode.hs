@@ -47,7 +47,6 @@ memoryFromImage :: [Int] -> Memory
 memoryFromImage xs = array (0, n - 1) (zip [0 ..] xs)
   where n = length xs
 
--- TODO: opcode 4
 -- TODO: parameter modes
 step :: Machine -> Machine
 step machine
@@ -56,6 +55,7 @@ step machine
     let ip = getIp machine
         memory = getMemory machine
         input = getInput machine
+        output = getOutput machine
         opcode = memory ! ip
      in case opcode of
           1 ->
@@ -79,7 +79,9 @@ step machine
                       }
               _ ->
                 error $ printf "Empty input for read opcode at position %d" ip
-          4 -> undefined
+          4 ->
+            let x = memory ! (memory ! (ip + 1))
+             in machine {getOutput = x : output, getIp = ip + 2}
           99 -> machine {isHalt = True}
           _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
