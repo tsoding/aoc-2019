@@ -47,7 +47,30 @@ memoryFromImage :: [Int] -> Memory
 memoryFromImage xs = array (0, n - 1) (zip [0 ..] xs)
   where n = length xs
 
--- TODO: parameter modes
+
+data Mode = Pos | Imm deriving Show
+type Opcode = Int
+type Param = Int
+
+-- ABCDE
+--  1002
+
+decodeMode :: Int -> Mode
+decodeMode 0 = Pos
+decodeMode 1 = Imm
+decodeMode x = error $ printf "Incorrect parameter mode %d" x
+
+decodeOpcode :: Int -> (Opcode, Mode, Mode, Mode)
+decodeOpcode x =
+  ( x `mod` 100
+  , decodeMode $ x `div` 100 `mod` 10
+  , decodeMode $ x `div` 1000 `mod` 10
+  , decodeMode $ x `div` 10000 `mod` 10)
+
+obtainParam :: Memory -> Param -> Mode -> Int
+obtainParam memory param Pos = memory ! param
+obtainParam _ param Imm = param
+
 step :: Machine -> Machine
 step machine
   | isHalt machine = machine
@@ -56,32 +79,33 @@ step machine
         memory = getMemory machine
         input = getInput machine
         output = getOutput machine
-        opcode = memory ! ip
+        op = memory ! ip
+        (opcode, m1, m2, m3) = decodeOpcode op
      in case opcode of
           1 ->
-            let a1 = memory ! (memory ! (ip + 1))
-                a2 = memory ! (memory ! (ip + 2))
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+                a2 = obtainParam memory (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
              in machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
           2 ->
-            let a1 = memory ! (memory ! (ip + 1))
-                a2 = memory ! (memory ! (ip + 2))
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+                a2 = obtainParam memory (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
              in machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
           3 ->
             case input of
               (x:input') ->
-                let p = memory ! (ip + 1)
+                let dst = memory ! (ip + 1)
                  in machine
-                      { getMemory = memory // [(p, x)]
+                      { getMemory = memory // [(dst, x)]
                       , getIp = ip + 2
                       , getInput = input'
                       }
               _ ->
                 error $ printf "Empty input for read opcode at position %d" ip
           4 ->
-            let x = memory ! (memory ! (ip + 1))
-             in machine {getOutput = x : output, getIp = ip + 2}
+            let a1 = obtainParam memory (memory ! (ip + 1)) m1
+             in machine {getOutput = a1 : output, getIp = ip + 2}
           99 -> machine {isHalt = True}
           _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
