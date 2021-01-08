@@ -3,10 +3,11 @@ module Main where
 import Intcode
 import Text.Printf
 
-part1 :: Machine -> Int
-part1 = head . getOutput . execute . setInput [1]
+solve :: Machine -> Int -> Int
+solve machine ident = head $ getOutput $ execute $ setInput [ident] machine
 
 main :: IO ()
 main = do
   machine <- machineFromFile "./input.txt"
-  printf "Part 1: %d\n" $ part1 machine
+  printf "Part 1: %d\n" $ solve machine 1
+  printf "Part 2: %d\n" $ solve machine 5
