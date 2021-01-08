@@ -6,6 +6,8 @@ import qualified Data.Text.IO as T
 import Data.Array
 import Text.Printf
 import Data.List
+import Control.Exception
+import Control.Monad
 
 type Address = Int
 
@@ -151,3 +153,108 @@ step machine
 
 execute :: Machine -> Machine
 execute = head . dropWhile (not . isHalt) . iterate' step
+
+test :: IO ()
+test = do
+  let equalTo8Pos =
+        ( [3, 9, 8, 9, 10, 9, 4, 9, 99, -1, 8]
+        , "Using position mode, consider whether the input is equal to 8; \
+          \output 1 (if it is) or 0 (if it is not)." :: String
+        , [([8], [1]), ([7], [0]), ([10], [0])])
+  let lessThan8Pos =
+        ( [3, 9, 7, 9, 10, 9, 4, 9, 99, -1, 8]
+        , "Using position mode, consider whether the input is less than 8; \
+          \output 1 (if it is) or 0 (if it is not)."
+        , [([8], [0]), ([9], [0]), ([7], [1])])
+  let equalTo8Imm =
+        ( [3, 3, 1108, -1, 8, 3, 4, 3, 99]
+        , "Using position mode, consider whether the input is equal to 8; \
+          \output 1 (if it is) or 0 (if it is not)." :: String
+        , [([8], [1]), ([7], [0]), ([10], [0])])
+  let lessThan8Imm =
+        ( [3, 3, 1107, -1, 8, 3, 4, 3, 99]
+        , "Using position mode, consider whether the input is less than 8; \
+          \output 1 (if it is) or 0 (if it is not)."
+        , [([8], [0]), ([9], [0]), ([7], [1])])
+  let jumpPos =
+        ( [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9]
+        , "Take an input, then output 0 if the input was zero or 1 \
+          \if the input was non-zero (position mode)"
+        , [([0], [0]), ([1], [1]), ([2], [1])])
+  let jumpImm =
+        ( [3, 3, 1105, -1, 9, 1101, 0, 0, 12, 4, 12, 99, 1]
+        , "Take an input, then output 0 if the input was zero or 1 \
+          \if the input was non-zero (immediate mode)"
+        , [([0], [0]), ([1], [1]), ([2], [1])])
+  let cmpAndJump =
+        ( [ 3
+          , 21
+          , 1008
+          , 21
+          , 8
+          , 20
+          , 1005
+          , 20
+          , 22
+          , 107
+          , 8
+          , 21
+          , 20
+          , 1006
+          , 20
+          , 31
+          , 1106
+          , 0
+          , 36
+          , 98
+          , 0
+          , 0
+          , 1002
+          , 21
+          , 125
+          , 20
+          , 4
+          , 20
+          , 1105
+          , 1
+          , 46
+          , 104
+          , 999
+          , 1105
+          , 1
+          , 46
+          , 1101
+          , 1000
+          , 1
+          , 20
+          , 4
+          , 20
+          , 1105
+          , 1
+          , 46
+          , 98
+          , 99
+          ]
+        , "Testing comparison and jumps at the same time"
+        , [([7], [999]), ([8], [1000]), ([9], [1001])])
+  let testGroups =
+        [ equalTo8Pos
+        , lessThan8Pos
+        , equalTo8Imm
+        , lessThan8Imm
+        , jumpPos
+        , jumpImm
+        , cmpAndJump
+        ]
+  forM_ testGroups $ \(program, description, testCases) -> do
+    printf "Description: %s\n" description
+    printf "Program: %s\n" $ show program
+    forM_ testCases $ \(input, expected) -> do
+      printf "  Input: %s\n" $ show input
+      printf "  Expected: %s\n" $ show expected
+      let actual =
+            getOutput $
+            execute $
+            setInput input $ machineFromMemory $ memoryFromImage program
+      printf "  Actual: %s\n" $ show actual
+      assert (expected == actual) $ putStrLn "    OK"
