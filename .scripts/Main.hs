@@ -1,5 +1,6 @@
--- Screencast Manager v0.0.1
+-- Screencast Manager v0.0.2
 -- ChangeLog:
+--   v0.0.2 - Add logging to addSc function
 --   v0.0.1 - Enable OverloadedStrings extension
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -10,6 +11,7 @@ import qualified Data.Text.IO as T
 import System.Directory
 import Data.Functor
 import Control.Monad
+import Text.Printf
 
 -- NOTE: Yt stands for YouTube. It's a YouTube link to the video
 type Yt = T.Text
@@ -47,6 +49,7 @@ addSc (Sc ep yt) = do
   readmePath <- epREADME ep
   readme <- T.lines <$> T.readFile readmePath
   let section = ytMarkdownSection yt
+  printf "Adding screencast to %s ...\n" readmePath
   T.writeFile readmePath $ T.unlines $ [head readme, ""] <> section <> tail readme
 
 noSc :: Sc -> IO Bool
