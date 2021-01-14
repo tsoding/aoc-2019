@@ -3,30 +3,44 @@ module Intcode where
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Array
 import Text.Printf
 import Data.List
 import Control.Exception
 import Control.Monad
 import Debug.Trace
+import qualified Data.HashMap.Strict as HM
+import Data.Maybe
 
-type Address = Int
+type Address = Integer
+type Value = Integer
 
-type Memory = Array Address Int
+type Memory = HM.HashMap Address Value
+
+emptyMemory :: Memory
+emptyMemory = HM.empty
+
+memoryFromImage :: [Value] -> Memory
+memoryFromImage xs = HM.fromList $ zip [0..] xs
+
+(!) :: Memory -> Address -> Value
+(!) memory address = fromMaybe 0 $ HM.lookup address memory
+
+(//) :: Memory -> [(Address, Value)] -> Memory
+(//) = foldl (\memory (address, value) -> HM.insert address value memory)
 
 data Machine = Machine
   { getMemory :: Memory
-  , getIp :: Int
+  , getIp :: Address
   , isHalt :: Bool
-  , getInput :: [Int]
-  , getOutput :: [Int]
-  , getBase :: Int
+  , getInput :: [Integer]
+  , getOutput :: [Integer]
+  , getBase :: Address
   } deriving (Show)
 
 emptyMachine :: Machine
 emptyMachine =
   Machine
-    { getMemory = (array (0, 0) [(0, 0)])
+    { getMemory = emptyMemory
     , getIp = 0
     , isHalt = False
     , getInput = []
@@ -34,10 +48,10 @@ emptyMachine =
     , getBase = 0
     }
 
-setInput :: [Int] -> Machine -> Machine
+setInput :: [Integer] -> Machine -> Machine
 setInput input machine = machine { getInput = input }
 
-setOutput :: [Int] -> Machine -> Machine
+setOutput :: [Integer] -> Machine -> Machine
 setOutput output machine = machine { getOutput = output }
 
 setMemory :: Memory -> Machine -> Machine
@@ -55,40 +69,42 @@ machineFromFile filePath = machineFromMemory <$> memoryFromFile filePath
 machineFromMemory :: Memory -> Machine
 machineFromMemory memory = emptyMachine {getMemory = memory}
 
-memoryFromImage :: [Int] -> Memory
-memoryFromImage xs = array (0, n - 1) (zip [0 ..] xs)
-  where n = length xs
-
 
 data Mode
   = Pos
   | Imm
   | Rel
   deriving (Show)
-type Opcode = Int
-type Param = Int
+type Opcode = Value
+type Param = Value
 
 -- ABCDE
 --  1002
 
-decodeMode :: Int -> Mode
+decodeMode :: Value -> Mode
 decodeMode 0 = Pos
 decodeMode 1 = Imm
 decodeMode 2 = Rel
 decodeMode x = error $ printf "Incorrect parameter mode %d" x
 
-decodeOpcode :: Int -> (Opcode, Mode, Mode, Mode)
+decodeOpcode :: Value -> (Opcode, Mode, Mode, Mode)
 decodeOpcode x =
   ( x `mod` 100
   , decodeMode $ x `div` 100 `mod` 10
   , decodeMode $ x `div` 1000 `mod` 10
   , decodeMode $ x `div` 10000 `mod` 10)
 
-obtainParam :: Machine -> Param -> Mode -> Int
+obtainParam :: Machine -> Param -> Mode -> Value
 obtainParam Machine {getMemory = memory} param Pos = memory ! param
 obtainParam _ param Imm = param
 obtainParam Machine {getMemory = memory, getBase = base} param Rel =
   memory ! (param + base)
+
+obtainDst :: Machine -> Param -> Mode -> Address
+obtainDst _ param Pos = param
+obtainDst Machine {getBase = base} param Rel = param + base
+obtainDst _ _ Imm =
+  error "Immediate mode does not make any sense for the destinations"
 
 t :: String -> a -> a
 -- t = trace
@@ -109,19 +125,19 @@ step machine
           1 ->
             let a1 = obtainParam machine (memory ! (ip + 1)) m1
                 a2 = obtainParam machine (memory ! (ip + 2)) m2
-                dst = memory ! (ip + 3)
+                dst = obtainDst machine (memory ! (ip + 3)) m3
              in t "plus" $
                 machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
           2 ->
             let a1 = obtainParam machine (memory ! (ip + 1)) m1
                 a2 = obtainParam machine (memory ! (ip + 2)) m2
-                dst = memory ! (ip + 3)
+                dst = obtainDst machine (memory ! (ip + 3)) m3
              in t "mult" $
                 machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
           3 ->
             case input of
               (x:input') ->
-                let dst = memory ! (ip + 1)
+                let dst = obtainDst machine (memory ! (ip + 1)) m1
                  in t "read" $
                     machine
                       { getMemory = memory // [(dst, x)]
@@ -150,7 +166,7 @@ step machine
           7 ->
             let a1 = obtainParam machine (memory ! (ip + 1)) m1
                 a2 = obtainParam machine (memory ! (ip + 2)) m2
-                dst = memory ! (ip + 3)
+                dst = obtainDst machine (memory ! (ip + 3)) m3
              in t "less than" $
                 machine
                   { getMemory =
@@ -165,7 +181,7 @@ step machine
           8 ->
             let a1 = obtainParam machine (memory ! (ip + 1)) m1
                 a2 = obtainParam machine (memory ! (ip + 2)) m2
-                dst = memory ! (ip + 3)
+                dst = obtainDst machine (memory ! (ip + 3)) m3
              in t "equal" $
                 machine
                   { getMemory =
@@ -179,13 +195,30 @@ step machine
                   }
           9 ->
             let a1 = obtainParam machine (memory ! (ip + 1)) m1
-             in t "adjust relative base" $
+             in t (printf "adjust relative base: %d" a1) $
                 machine {getBase = base + a1, getIp = ip + 2}
           99 -> t "halt" $ machine {isHalt = True}
           _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
 execute :: Machine -> Machine
 execute = head . dropWhile (not . isHalt) . iterate step
+
+popOutput :: Machine -> (Machine, Maybe Value)
+popOutput machine@Machine {getOutput = output:restOutput} =
+  (machine {getOutput = restOutput}, Just output)
+popOutput machine = (machine, Nothing)
+
+pushInput :: Value -> Machine -> Machine
+pushInput input machine@Machine {getInput = restInput} =
+  machine {getInput = restInput ++ [input]}
+
+waitForOutput :: Machine -> (Machine, Maybe Value)
+waitForOutput machine =
+  popOutput $
+  head $
+  dropWhile
+    (\m -> not (isHalt m) && null (getOutput m)) $
+  iterate step machine
 
 test :: IO ()
 test = do

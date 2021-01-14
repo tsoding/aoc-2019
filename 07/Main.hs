@@ -8,23 +8,6 @@ import Data.Maybe
 import Text.Printf
 import Debug.Trace
 
-popOutput :: Machine -> (Machine, Maybe Int)
-popOutput machine@Machine {getOutput = output:restOutput} =
-  (machine {getOutput = restOutput}, Just output)
-popOutput machine = (machine, Nothing)
-
-pushInput :: Int -> Machine -> Machine
-pushInput input machine@Machine {getInput = restInput} =
-  machine {getInput = restInput ++ [input]}
-
-waitForOutput :: Machine -> (Machine, Maybe Int)
-waitForOutput machine =
-  popOutput $
-  head $
-  dropWhile
-    (\m -> not (isHalt m) && null (getOutput m)) $
-  iterate step machine
-
 singleCycle :: ([Machine], Maybe Int) -> ([Machine], Maybe Int)
 singleCycle (ms, Nothing) = (ms, Nothing)
 singleCycle (m0:ms, Just input) =
