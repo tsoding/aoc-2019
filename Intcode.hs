@@ -8,6 +8,7 @@ import Text.Printf
 import Data.List
 import Control.Exception
 import Control.Monad
+import Debug.Trace
 
 type Address = Int
 
@@ -73,6 +74,10 @@ obtainParam :: Memory -> Param -> Mode -> Int
 obtainParam memory param Pos = memory ! param
 obtainParam _ param Imm = param
 
+t :: String -> a -> a
+-- t = trace
+t s = id
+
 step :: Machine -> Machine
 step machine
   | isHalt machine = machine
@@ -88,17 +93,20 @@ step machine
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
                 a2 = obtainParam memory (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
-             in machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
+             in t "plus" $
+                machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
           2 ->
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
                 a2 = obtainParam memory (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
-             in machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
+             in t "mult" $
+                machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
           3 ->
             case input of
               (x:input') ->
                 let dst = memory ! (ip + 1)
-                 in machine
+                 in t "read" $
+                    machine
                       { getMemory = memory // [(dst, x)]
                       , getIp = ip + 2
                       , getInput = input'
@@ -107,24 +115,28 @@ step machine
                 error $ printf "Empty input for read opcode at position %d" ip
           4 ->
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
-             in machine {getOutput = a1 : output, getIp = ip + 2}
+             in t "write" $
+                machine {getOutput = a1 : output, getIp = ip + 2}
           5 ->
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
                 a2 = obtainParam memory (memory ! (ip + 2)) m2
-             in if a1 /= 0
+             in t "if not-equal" $
+                if a1 /= 0
                   then machine {getIp = a2}
                   else machine {getIp = ip + 3}
           6 ->
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
                 a2 = obtainParam memory (memory ! (ip + 2)) m2
-             in if a1 == 0
+             in t "if equal-zero" $
+                if a1 == 0
                   then machine {getIp = a2}
                   else machine {getIp = ip + 3}
           7 ->
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
                 a2 = obtainParam memory (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
-             in machine
+             in t "less than" $
+                machine
                   { getMemory =
                       memory //
                       [ ( dst
@@ -138,7 +150,8 @@ step machine
             let a1 = obtainParam memory (memory ! (ip + 1)) m1
                 a2 = obtainParam memory (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
-             in machine
+             in t "equal" $
+                machine
                   { getMemory =
                       memory //
                       [ ( dst
@@ -148,11 +161,11 @@ step machine
                       ]
                   , getIp = ip + 4
                   }
-          99 -> machine {isHalt = True}
+          99 -> t "halt" $ machine {isHalt = True}
           _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
 execute :: Machine -> Machine
-execute = head . dropWhile (not . isHalt) . iterate' step
+execute = head . dropWhile (not . isHalt) . iterate step
 
 test :: IO ()
 test = do
