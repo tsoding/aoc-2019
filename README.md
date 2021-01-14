@@ -30,5 +30,6 @@ The Glorious Glasgow Haskell Compilation System, version 8.6.5
 
 ```console
 $ cd <day-folder>
-$ runghc -i.. Main.hs
+$ ghc -i.. -package unordered-containers Main.hs
+$ ./Main
 ```
