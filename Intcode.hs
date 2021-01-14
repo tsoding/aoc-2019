@@ -15,15 +15,24 @@ type Address = Int
 type Memory = Array Address Int
 
 data Machine = Machine
-  { getMemory :: !Memory
-  , getIp :: !Int
-  , isHalt :: !Bool
+  { getMemory :: Memory
+  , getIp :: Int
+  , isHalt :: Bool
   , getInput :: [Int]
   , getOutput :: [Int]
+  , getBase :: Int
   } deriving (Show)
 
 emptyMachine :: Machine
-emptyMachine = Machine (array (0, 0) [(0, 0)]) 0 False [] []
+emptyMachine =
+  Machine
+    { getMemory = (array (0, 0) [(0, 0)])
+    , getIp = 0
+    , isHalt = False
+    , getInput = []
+    , getOutput = []
+    , getBase = 0
+    }
 
 setInput :: [Int] -> Machine -> Machine
 setInput input machine = machine { getInput = input }
@@ -44,14 +53,18 @@ machineFromFile :: FilePath -> IO Machine
 machineFromFile filePath = machineFromMemory <$> memoryFromFile filePath
 
 machineFromMemory :: Memory -> Machine
-machineFromMemory memory = Machine memory 0 False [] []
+machineFromMemory memory = emptyMachine {getMemory = memory}
 
 memoryFromImage :: [Int] -> Memory
 memoryFromImage xs = array (0, n - 1) (zip [0 ..] xs)
   where n = length xs
 
 
-data Mode = Pos | Imm deriving Show
+data Mode
+  = Pos
+  | Imm
+  | Rel
+  deriving (Show)
 type Opcode = Int
 type Param = Int
 
@@ -61,6 +74,7 @@ type Param = Int
 decodeMode :: Int -> Mode
 decodeMode 0 = Pos
 decodeMode 1 = Imm
+decodeMode 2 = Rel
 decodeMode x = error $ printf "Incorrect parameter mode %d" x
 
 decodeOpcode :: Int -> (Opcode, Mode, Mode, Mode)
@@ -70,9 +84,11 @@ decodeOpcode x =
   , decodeMode $ x `div` 1000 `mod` 10
   , decodeMode $ x `div` 10000 `mod` 10)
 
-obtainParam :: Memory -> Param -> Mode -> Int
-obtainParam memory param Pos = memory ! param
+obtainParam :: Machine -> Param -> Mode -> Int
+obtainParam Machine {getMemory = memory} param Pos = memory ! param
 obtainParam _ param Imm = param
+obtainParam Machine {getMemory = memory, getBase = base} param Rel =
+  memory ! (param + base)
 
 t :: String -> a -> a
 -- t = trace
@@ -87,17 +103,18 @@ step machine
         input = getInput machine
         output = getOutput machine
         op = memory ! ip
+        base = getBase machine
         (opcode, m1, m2, m3) = decodeOpcode op
      in case opcode of
           1 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-                a2 = obtainParam memory (memory ! (ip + 2)) m2
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+                a2 = obtainParam machine (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
              in t "plus" $
                 machine {getMemory = memory // [(dst, a1 + a2)], getIp = ip + 4}
           2 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-                a2 = obtainParam memory (memory ! (ip + 2)) m2
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+                a2 = obtainParam machine (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
              in t "mult" $
                 machine {getMemory = memory // [(dst, a1 * a2)], getIp = ip + 4}
@@ -114,26 +131,25 @@ step machine
               _ ->
                 error $ printf "Empty input for read opcode at position %d" ip
           4 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-             in t "write" $
-                machine {getOutput = a1 : output, getIp = ip + 2}
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+             in t "write" $ machine {getOutput = a1 : output, getIp = ip + 2}
           5 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-                a2 = obtainParam memory (memory ! (ip + 2)) m2
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+                a2 = obtainParam machine (memory ! (ip + 2)) m2
              in t "if not-equal" $
                 if a1 /= 0
                   then machine {getIp = a2}
                   else machine {getIp = ip + 3}
           6 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-                a2 = obtainParam memory (memory ! (ip + 2)) m2
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+                a2 = obtainParam machine (memory ! (ip + 2)) m2
              in t "if equal-zero" $
                 if a1 == 0
                   then machine {getIp = a2}
                   else machine {getIp = ip + 3}
           7 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-                a2 = obtainParam memory (memory ! (ip + 2)) m2
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+                a2 = obtainParam machine (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
              in t "less than" $
                 machine
@@ -147,8 +163,8 @@ step machine
                   , getIp = ip + 4
                   }
           8 ->
-            let a1 = obtainParam memory (memory ! (ip + 1)) m1
-                a2 = obtainParam memory (memory ! (ip + 2)) m2
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+                a2 = obtainParam machine (memory ! (ip + 2)) m2
                 dst = memory ! (ip + 3)
              in t "equal" $
                 machine
@@ -161,6 +177,10 @@ step machine
                       ]
                   , getIp = ip + 4
                   }
+          9 ->
+            let a1 = obtainParam machine (memory ! (ip + 1)) m1
+             in t "adjust relative base" $
+                machine {getBase = base + a1, getIp = ip + 2}
           99 -> t "halt" $ machine {isHalt = True}
           _ -> error $ printf "Unknown opcode `%d` at position `%d`" opcode ip
 
