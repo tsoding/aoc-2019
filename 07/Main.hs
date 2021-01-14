@@ -8,7 +8,7 @@ import Data.Maybe
 import Text.Printf
 import Debug.Trace
 
-singleCycle :: ([Machine], Maybe Int) -> ([Machine], Maybe Int)
+singleCycle :: ([Machine], Maybe Value) -> ([Machine], Maybe Value)
 singleCycle (ms, Nothing) = (ms, Nothing)
 singleCycle (m0:ms, Just input) =
   let ms' =
@@ -25,23 +25,23 @@ primeMachines :: [Setting] -> Machine -> [Machine]
 primeMachines settings machine =
   map (\setting -> pushInput setting machine) settings
 
-runAmpLoop :: Machine -> [Int] -> Int
+runAmpLoop :: Machine -> [Value] -> Value
 runAmpLoop machine settings =
   last $
   catMaybes $
   takeWhile isJust $
   map snd $ iterate singleCycle (primeMachines settings machine, Just 0)
 
-part2 :: FilePath -> IO Int
+part2 :: FilePath -> IO Value
 part2 filePath = do
   machine <- machineFromFile filePath
   return $ maximum $ map (runAmpLoop machine) $ permutations [5 .. 9]
 
 newtype Amp = Amp
-  { runAmp :: Int -> Int
+  { runAmp :: Value -> Value
   }
 
-type Setting = Int
+type Setting = Value
 
 newAmp :: Machine -> Setting -> Amp
 newAmp machine setting =
@@ -54,10 +54,10 @@ instance Semigroup Amp where
 instance Monoid Amp where
   mempty = Amp id
 
-runAmpChain :: Machine -> [Int] -> Int
+runAmpChain :: Machine -> [Value] -> Value
 runAmpChain machine settings = runAmp (foldMap (newAmp machine) settings) 0
 
-part1 :: FilePath -> IO Int
+part1 :: FilePath -> IO Value
 part1 filePath = do
   machine <- machineFromFile filePath
   return $ maximum $ map (runAmpChain machine) $ permutations [0 .. 4]

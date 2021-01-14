@@ -3,7 +3,7 @@ module Main where
 import Intcode
 import Text.Printf
 
-solve :: Machine -> Int -> Int
+solve :: Machine -> Value -> Value
 solve machine ident = head $ getOutput $ execute $ setInput [ident] machine
 
 main :: IO ()
