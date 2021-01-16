@@ -1,5 +1,9 @@
 # [Day 8](https://adventofcode.com/2019/day/8) solution
 
+## Screencast
+
+[![screencast](http://i3.ytimg.com/vi/AxxugfftIeY/hqdefault.jpg)](https://www.youtube.com/watch?v=AxxugfftIeY&t=12139s)
+
 ## Expected Result
 
 ```console
