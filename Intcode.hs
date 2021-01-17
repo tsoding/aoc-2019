@@ -8,25 +8,25 @@ import Data.List
 import Control.Exception
 import Control.Monad
 import Debug.Trace
-import qualified Data.HashMap.Strict as HM
+import qualified Data.Map.Strict as M
 import Data.Maybe
 
 type Address = Integer
 type Value = Integer
 
-type Memory = HM.HashMap Address Value
+type Memory = M.Map Address Value
 
 emptyMemory :: Memory
-emptyMemory = HM.empty
+emptyMemory = M.empty
 
 memoryFromImage :: [Value] -> Memory
-memoryFromImage xs = HM.fromList $ zip [0..] xs
+memoryFromImage xs = M.fromList $ zip [0..] xs
 
 (!) :: Memory -> Address -> Value
-(!) memory address = fromMaybe 0 $ HM.lookup address memory
+(!) memory address = fromMaybe 0 $ M.lookup address memory
 
 (//) :: Memory -> [(Address, Value)] -> Memory
-(//) = foldl (\memory (address, value) -> HM.insert address value memory)
+(//) = foldl (\memory (address, value) -> M.insert address value memory)
 
 data Machine = Machine
   { getMemory :: Memory
