@@ -212,6 +212,20 @@ pushInput :: Value -> Machine -> Machine
 pushInput input machine@Machine {getInput = restInput} =
   machine {getInput = restInput ++ [input]}
 
+isAboutToRead :: Machine -> Bool
+isAboutToRead machine =
+  let ip = getIp machine
+      memory = getMemory machine
+      op = memory ! ip
+      (opcode, _, _, _) = decodeOpcode op
+   in opcode == 3
+
+waitForInput :: Machine -> Machine
+waitForInput machine =
+  head $ dropWhile (not . isTimeToStop) $ iterate step machine
+  where
+    isTimeToStop m = isHalt m || (isAboutToRead m && null (getInput m))
+
 waitForOutput :: Machine -> (Machine, Maybe Value)
 waitForOutput machine =
   popOutput $
